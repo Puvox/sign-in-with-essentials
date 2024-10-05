@@ -1,0 +1,65 @@
+
+
+/* Only include the "OR" on the login page. */
+.login #siwe-container::before {
+	content: 'OR';
+    position: absolute;
+    top: -30px;
+    left: calc(50% - 10px);
+    padding: 0 5px;
+}
+
+#siwe-container {
+	background-color: #FFF;
+	margin: 40px 0 0;
+	position: relative;
+	display: flex;
+    flex-direction: column;
+	align-items: center;
+	font-size: 14px;
+	font-weight: 600;
+	text-decoration: none;
+	padding: 8px;
+	background: none;
+	border: 1px solid rgba(0,0,0,.25);
+	color: rgba(0,0,0,.54);
+	border-radius: 4px;
+}
+
+.siwe-anchor img {
+	border: 1px solid gray;
+    border-radius: 3px;
+	width: 200px;
+	height: 45px;
+}
+
+.siwe-anchor img:hover {
+	background-color: #eee;
+	color: #6d6d6d;
+	cursor: pointer;
+	box-shadow: 0px 0px 5px black;
+}
+
+.siwe-anchor #apple-forbid-hidden-mail {
+    display:none;
+    position: absolute;
+    bottom: 0px;
+    background: black;
+    color: white;
+    padding: 10px;
+    margin-bottom: -50px;
+    width: auto;
+    align-items: center;
+}
+
+.no-js #siwe-container {
+	margin: 20px 0 0;
+	border: none;
+	box-shadow: none;
+}
+
+.no-js #siwe-container::before {
+	top: -25px;
+	color: rgba(0,0,0,.54);
+}
+
