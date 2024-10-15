@@ -4,7 +4,22 @@
 			"path": "."
 		}
 	],
-	"settings": {},
+	"settings": {
+		"TortoisegitButtons.TortoiseLocation": "C:\\Program Files\\TortoiseGit",
+		"TortoisegitButtons.TortoiseWslPrefixLocation": "",
+		"search.exclude": {
+			"**/node_modules/": true,
+			"**/dist/": true,
+			"**/vendor/": true,
+			"**/build/": true
+		},
+		"files.exclude": {
+			"**/node_modules/": true,
+			"**/dist/": true,
+			"**/vendor/": true,
+			"**/build/": true
+		},
+	},
 	"launch": {
 		"version": "0.2.0",
 		"configurations": [

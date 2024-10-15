@@ -20,68 +20,194 @@ if ( ! defined( 'WPINC' ) ) {
 	die;
 }
 
-/**
- * The code that runs during plugin activation.
- */
-function sign_in_with_essentials_activate() {
-	require_once plugin_dir_path( __FILE__ ) . 'src/includes/class-siwe-activation-hooks.php';
-	Sign_In_With_Essentials_Activator::activate();
-}
+define ( 'SIWE_PLUGIN_VERSION', '1.0.1' );
+
+define ('SIWE_DEFAULT_REDIRECT_PATH', '?google_response');
+
 
 /**
- * The code that runs during plugin deactivation.
- */
-function sign_in_with_essentials_deactivate() {
-	require_once plugin_dir_path( __FILE__ ) . 'src/includes/class-siwe-activation-hooks.php';
-	Sign_In_With_Essentials_Activator::deactivate();
-}
-
-register_activation_hook( __FILE__, 'sign_in_with_essentials_activate' );
-register_deactivation_hook( __FILE__, 'sign_in_with_essentials_deactivate' );
-
-/**
- * The core plugin class that is used to define internationalization,
- * admin-specific hooks, and public-facing site hooks.
- */
-require plugin_dir_path( __FILE__ ) . 'src/includes/class-siwe.php';
-
-/**
- * Begins execution of the plugin.
+ * The core plugin class, that includes attributes and functions used across both the
+ * public-facing side of the site and the admin area.
+ * This is used to define internationalization, admin-specific hooks, and
+ * public-facing site hooks.
  *
- * Since everything within the plugin is registered via hooks,
- * then kicking off the plugin from this point in the file does
- * not affect the page life cycle.
+ * Also maintains the unique identifier of this plugin as well as the current
+ * version of the plugin.
  *
- * @since    1.0.0
+ * @since      1.0.0
+ * @package    Sign_In_With_Essentials
+ * @subpackage Sign_In_With_Essentials/includes
+ * @author     Puvox Software <support@puvox.software>
  */
-function sign_in_with_essentials_run() {
+class Sign_In_With_Essentials {
 
-	define( 'SIWE_PLUGIN_FILE', basename( dirname( __FILE__ ) ) . '/' . basename( __FILE__ ) );
-	$plugin = new Sign_In_With_Essentials( '1.8.0' );
-	$plugin->run();
-	if (get_option('siwe_expose_class_instance', true)) {
-		$GLOBALS['SIGN_IN_WITH_ESSENTIALS_INSTANCE_PUBLIC'] = $plugin;
+	protected $plugin_name;
+	protected $version;
+	protected $actions = [];
+	protected $filters = [];
+
+	/**
+	 * Define the core functionality of the plugin.
+	 *
+	 * Set the plugin name and the plugin version that can be used throughout the plugin.
+	 * Load the dependencies, define the locale, and set the hooks for the admin area and
+	 * the public-facing side of the site.
+	 *
+	 * @since    1.0.0
+	 *
+	 * @param string $version The current version of the plugin.
+	 */
+	public function __construct( $version ) {
+
+		$this->plugin_name = 'sign-in-with-essentials';
+		$this->version     = $version;
+
+		$this->load_dependencies();
+		$this->set_locale();
+		$this->load_classes();
+	}
+
+	public function get_plugin_name() {
+		return $this->plugin_name;
+	}
+
+	public function get_version() {
+		return $this->version;
+	}
+
+	private function load_dependencies() {
+		require_once __DIR__ . '/src/includes/class-siwe-utility.php';
+		require_once __DIR__ . '/src/includes/class-siwe-wpcli.php';
+		require_once __DIR__ . '/src/includes/class-module-google.php';
+		require_once __DIR__ . '/src/class-siwe-admin.php';
+		require_once __DIR__ . '/src/class-siwe-public.php';
+	}
+
+	private function load_classes() {
+		$plugin_admin = new Sign_In_With_Essentials_Admin( $this, $this->get_plugin_name(), $this->get_version() );
+		$plugin_public = new Sign_In_With_Essentials_Public( $this, $this->get_plugin_name(), $this->get_version() );
+		if (get_option('siwe_expose_class_instance')) {
+			do_action('SIGN_IN_WITH_ESSENTIALS_INSTANCE_ADMIN', $plugin_admin);
+			do_action('SIGN_IN_WITH_ESSENTIALS_INSTANCE_PUBLIC', $plugin_public);
+		}
+		// If WordPress is running in WP_CLI.
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			new Sign_In_With_Essentials_WPCLI();
+		}
+	}
+
+
+	/**
+	 * Add a new action to the collection to be registered with WordPress.
+	 *
+	 * @since    1.0.0
+	 * @param    string $hook             The name of the WordPress action that is being registered.
+	 * @param    object $component        A reference to the instance of the object on which the action is defined.
+	 * @param    string $callback         The name of the function definition on the $component.
+	 * @param    int    $priority         Optional. he priority at which the function should be fired. Default is 10.
+	 * @param    int    $accepted_args    Optional. The number of arguments that should be passed to the $callback. Default is 1.
+	 */
+	public function add_action( $hook, $component, $callback, $priority = 10, $accepted_args = 1 ) {
+		$this->actions = $this->add( $this->actions, $hook, $component, $callback, $priority, $accepted_args );
+	}
+
+	public function add_filter( $hook, $component, $callback, $priority = 10, $accepted_args = 1 ) {
+		$this->filters = $this->add( $this->filters, $hook, $component, $callback, $priority, $accepted_args );
+	}
+
+	private function add( $hooks, $hook, $component, $callback, $priority, $accepted_args ) {
+		$hooks[] = array(
+			'hook'          => $hook,
+			'component'     => $component,
+			'callback'      => $callback,
+			'priority'      => $priority,
+			'accepted_args' => $accepted_args,
+		);
+		return $hooks;
+	}
+
+
+
+	/**
+	 * Register the filters and actions with WordPress.
+	 *
+	 * @since    1.0.0
+	 */
+	public function run_hooks() {
+		foreach ( $this->filters as $hook ) {
+			add_filter( $hook['hook'], array( $hook['component'], $hook['callback'] ), $hook['priority'], $hook['accepted_args'] );
+		}
+
+		foreach ( $this->actions as $hook ) {
+			add_action( $hook['hook'], array( $hook['component'], $hook['callback'] ), $hook['priority'], $hook['accepted_args'] );
+		}
+	}
+
+	/**
+	 * Define the locale for this plugin for internationalization, in order to set the domain and to register the hook
+	 * with WordPress.
+	 *
+	 * @since    1.0.0
+	 * @access   private
+	 */
+	private function set_locale() {
+		$this->add_action( 'plugins_loaded', $this, 'load_plugin_textdomain' );
+	}
+
+	public function load_plugin_textdomain() {
+		load_plugin_textdomain(
+			'sign-in-with-essentials',
+			false,
+			plugin_dir_path( dirname( __FILE__ ) )  . '/languages/'
+		);
+	}
+
+	public function siwe_vendor_autoload() {
+		require_once __DIR__ . '/vendor/autoload.php';
+	}
+
+	public static function siwe_redirect_back_url() {
+		return get_option( 'siwe_google_custom_redir_url', SIWE_DEFAULT_REDIRECT_PATH);
+	}
+
+	public static function siwe_array_value( $container, $name, $default = null) {
+		return array_key_exists ($name, $container) ? $container[$name] : $default;
 	}
 
 }
-sign_in_with_essentials_run();
 
 
-function siwe_default_url() {
-	return get_option( 'siwe_google_custom_redir_url', '?google_response' );
+
+(new Sign_In_With_Essentials(SIWE_PLUGIN_VERSION))->run_hooks();
+
+
+/**
+ * Get the button html as a string.
+ *
+ * @return string
+ */
+function siwe_get_button() {
+	return Sign_In_With_Essentials_Public::get_signin_button();
 }
 
-function siwe_global_value( $container, $name) {
-	if ( ! array_key_exists ($name, $container) ) {
+/**
+ * Get the Google authentication URL.
+ *
+ * @since 1.8.0
+ *
+ * @param array $state Nonce to verify response from Google.
+ *
+ * @return string
+ */
+function siwe_get_google_auth_url( $state = array() ) {
+	$client_id = get_option( 'siwe_google_client_id' );
+
+	// Bail if there is no client ID.
+	if ( ! $client_id ) {
 		return '';
 	}
-	$value = $container[$name];
-	if ( $value === '' || $value === null || ( is_array( $value ) && count( $value ) === 0 ) ) {
-		return $container[$name];
-	}
-	return esc_attr( wp_unslash( $value ) );
+
+	return ( new SIWE_GoogleAuth( $client_id ) )->get_google_auth_url( $state );
 }
 
-function siwe_array_value( $container, $name, $default = null) {
-	return array_key_exists ($name, $container) ? $container[$name] : $default;
-}
+

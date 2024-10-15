@@ -145,13 +145,13 @@ class Sign_In_With_Essentials_WPCLI {
 			}
 
 			$arg_opts = $args_map[ $key ];
-			$allow_empty = siwe_array_value ($arg_opts, 'allow_empty', true);
+			$allow_empty = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'allow_empty', true);
 
 			if ( empty ($value) &&  $allow_empty === false ) {
 				WP_CLI::error( "Empty value not allowed for: $key" );
 			}
 
-			$allowed_values = siwe_array_value ($arg_opts, 'allowed_values', null);
+			$allowed_values = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'allowed_values', null);
 			if ($allowed_values !== null) {
 				if ( ! in_array( $value, $allowed_values ) ) {
 					WP_CLI::error( "$key value should be among: " . implode( ', ', $allowed_values ) );
@@ -164,7 +164,7 @@ class Sign_In_With_Essentials_WPCLI {
 				$value = boolval( $value );
 			}
 
-			$sanitizer = siwe_array_value ($arg_opts, 'sanitizer', null);
+			$sanitizer = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'sanitizer', null);
 			if ($sanitizer !== null) {
 				$new_value = call_user_func ($sanitizer, $value);
 				if ($new_value !== $value) {
@@ -173,7 +173,7 @@ class Sign_In_With_Essentials_WPCLI {
 				$value = $new_value;
 			}
 
-			$scope = siwe_array_value ($arg_opts, 'scope', null);
+			$scope = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'scope', null);
 			$prefix = $scope  ? 'siwe_google_' : 'siwe_';
 			$result = update_option( $prefix . $key, $value );
 

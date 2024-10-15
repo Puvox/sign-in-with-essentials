@@ -2,15 +2,6 @@
 /**
  * The admin-specific functionality of the plugin.
  *
- * @since      1.0.0
- *
- * @package    Sign_In_With_Essentials
- * @subpackage Sign_In_With_Essentials/admin
- */
-
-/**
- * The admin-specific functionality of the plugin.
- *
  * Defines the plugin name, version, and two examples hooks for how to
  * enqueue the admin-specific stylesheet and JavaScript.
  *
@@ -20,22 +11,8 @@
  */
 class Sign_In_With_Essentials_Admin {
 
-	/**
-	 * The ID of this plugin.
-	 *
-	 * @since    1.0.0
-	 * @access   private
-	 * @var      string    $plugin_name    The ID of this plugin.
-	 */
+	private $parent;
 	private $plugin_name;
-
-	/**
-	 * The version of this plugin.
-	 *
-	 * @since    1.0.0
-	 * @access   private
-	 * @var      string    $version    The current version of this plugin.
-	 */
 	private $version;
 
 	/**
@@ -85,20 +62,38 @@ class Sign_In_With_Essentials_Admin {
 	 * @param      string $plugin_name   The name of this plugin.
 	 * @param      string $version       The version of this plugin.
 	 */
-	public function __construct( $plugin_name, $version ) {
-
+	public function __construct( $parent, $plugin_name, $version ) {
+		$this->parent = $parent;
 		$this->plugin_name = $plugin_name;
 		$this->version     = $version;
 		$this->google_auth = new SIWE_GoogleAuth( get_option( 'siwe_google_client_id' ) );
-
+		$this->init_hooks();
 	}
 
 
-	/**
-	 * Load assets for admin.
-	 *
-	 * @since 1.3.1
-	 */
+	public function init_hooks() {
+		$this->parent->add_action( 'admin_init', $this, 'settings_api_init' );
+		$this->parent->add_action( 'admin_menu', $this, 'settings_menu_init' );
+		$this->parent->add_action( 'admin_enqueue_scripts', $this, 'enqueue_styles' );
+		$this->parent->add_action( 'admin_init', $this, 'disallow_email_changes' );
+		$this->parent->add_action( 'admin_init', $this, 'process_settings_export' );
+		$this->parent->add_action( 'admin_init', $this, 'process_settings_import' );
+		$this->parent->add_action( 'show_user_profile', $this, 'add_connect_button_to_profile' );
+		$this->parent->add_action( 'login_init', $this, 'check_login_redirection', 888 );
+		$this->parent->add_filter( 'get_avatar', $this, 'slug_get_avatar', 10, 5 );
+		$this->parent->add_action( 'admin_init', $this, 'disconnect_account' );
+		if ( isset( $_GET['google_redirect'] ) ) {
+			$this->parent->add_action( 'template_redirect', $this, 'google_auth_redirect' );
+		}
+		$this->parent->add_action( 'init', $this, 'check_authenticate_user' );
+		$this->parent->add_filter( 'plugin_action_links_' . $this->plugin_name . '/' . $this->plugin_name . '.php', $this, 'add_action_links' );
+
+		// Check if domain restrictions have kept a user from logging in.
+		if ( isset( $_GET['google_login'] ) ) {
+			$this->parent->add_filter( 'login_message', $this, 'allowed_domains_error' );
+		}
+	}
+
 	public function enqueue_styles() {
 		wp_enqueue_style( $this->plugin_name, plugin_dir_url(__FILE__) . 'assets/siwe-admin.css', array(), $this->version, 'all' );
 	}
@@ -110,13 +105,10 @@ class Sign_In_With_Essentials_Admin {
 	 * @param array $links The links to add to the plugin page.
 	 */
 	public function add_action_links( $links ) {
-
 		$mylinks = array(
 			'<a href="' . admin_url( 'options-general.php?page=siwe_settings' ) . '">' . esc_attr__( 'Settings', 'sign-in-with-essentials' ) . '</a>',
 		);
-
 		return array_merge( $links, $mylinks );
-
 	}
 
 	/**
@@ -326,7 +318,7 @@ class Sign_In_With_Essentials_Admin {
 				'siwe_google_custom_redir_url',
 				esc_attr__( 'Custom redirect-back url', 'sign-in-with-essentials' ),
 				function () {
-					echo '<input name="siwe_google_custom_redir_url" id="siwe_google_custom_redir_url" type="text" size="50" value="' . esc_attr( siwe_default_url() ). '" placeholder="?google_response" />';
+					echo '<input name="siwe_google_custom_redir_url" id="siwe_google_custom_redir_url" type="text" size="50" value="' . esc_attr( $this->parent->siwe_redirect_back_url() ). '" placeholder="'. SIWE_DEFAULT_REDIRECT_PATH . '" />';
 					echo sprintf(
 						'<p>%s</p>',
 						wp_kses_data( __( 'Custom redirect-back url for Google (you can use relative path or even full domain links, like <code>https://example.com/whatever</code>)', 'sign-in-with-essentials' ) ),
@@ -499,7 +491,7 @@ class Sign_In_With_Essentials_Admin {
 	public function google_auth_redirect() {
 
 		// Gather necessary elements for 'state' parameter.
-		$redirect_to = siwe_global_value($_GET, 'redirect_to');
+		$redirect_to = sanitize_url ($this->parent->siwe_array_value($_GET, 'redirect_to'));
 
 		$this->state = array(
 			'redirect_to' => $redirect_to,
@@ -515,6 +507,27 @@ class Sign_In_With_Essentials_Admin {
 	 *
 	 * @since 1.0.0
 	 */
+	public function check_authenticate_user($code = null, $state = null, $redirect_after_login = true) {
+		// Handle Google's response before anything is rendered.
+		$redir_url = $this->parent->siwe_redirect_back_url();
+		$is_query = str_contains ($redir_url, '?' );
+		$contains_domain = str_contains( $redir_url, '://' );
+
+		if (
+			// if it contains another domain, then we don't need to check
+			!$contains_domain &&
+			isset( $_GET['code'] ) &&
+			(
+				(   $is_query && isset( $_GET[ str_replace('?', '', $redir_url) ] ) )
+					||
+				( ! $is_query && str_starts_with( sanitize_url( $this->parent->siwe_array_value ($_SERVER, 'REQUEST_URI') ), $redir_url ) )
+			)
+		)
+		{
+			$this->authenticate_user( $code, $state, $redirect_after_login );
+		}
+	}
+
 	public function authenticate_user($code = null, $state = null, $redirect_after_login = true) {
 
 		$params = [];
@@ -524,8 +537,8 @@ class Sign_In_With_Essentials_Admin {
 		if (empty($state) && empty($_GET['state'])) {
 			throw new Exception('No state provided');
 		}
-		$params['code'] = $code ?: siwe_global_value( $_GET, 'code');
-		$params['state'] = $state ?: siwe_global_value( $_GET, 'state');
+		$params['code'] = $code ?: sanitize_text_field( $this->parent->siwe_array_value( $_GET, 'code' ));
+		$params['state'] = $state ?: sanitize_text_field( $this->parent->siwe_array_value( $_GET, 'state' ));
 		$params['redirect_after_login'] = true;
 
 		$access_token = $this->set_access_token( $params['code'] );
@@ -622,7 +635,7 @@ class Sign_In_With_Essentials_Admin {
 			return $params['redirect_after_login_url'];
 		}
 
-		$requested_redirect_to = siwe_global_value ($_REQUEST, 'redirect_to');
+		$requested_redirect_to = sanitize_url ($this->parent->siwe_array_value ($_REQUEST, 'redirect_to'));
 		if ( empty ($requested_redirect_to) )
 			$requested_redirect_to = $params['redirect_after_login_url'] ;
 
@@ -656,7 +669,7 @@ class Sign_In_With_Essentials_Admin {
 			return;
 		}
 
-		if ( ! wp_verify_nonce( siwe_global_value ($_POST, 'siwe_export_nonce'), 'siwe_export_nonce' ) ) {
+		if ( ! wp_verify_nonce( $this->parent->siwe_array_value ($_POST, 'siwe_export_nonce'), 'siwe_export_nonce' ) ) {
 			return;
 		}
 
@@ -674,7 +687,7 @@ class Sign_In_With_Essentials_Admin {
 			'siwe_show_unlink_in_profile'         => get_option( 'siwe_show_unlink_in_profile' ),
 			'siwe_show_on_login'                  => get_option( 'siwe_show_on_login' ),
 			'siwe_allow_mail_change'              => get_option( 'siwe_allow_mail_change' ),
-			'siwe_google_custom_redir_url'        => siwe_default_url(),
+			'siwe_google_custom_redir_url'        => $this->parent->siwe_redirect_back_url(),
 			'siwe_expose_class_instance'          => get_option( 'siwe_expose_class_instance', true ),
 		);
 		if ($this->enable_google_pic) {
@@ -702,7 +715,7 @@ class Sign_In_With_Essentials_Admin {
 			return;
 		}
 
-		if ( ! wp_verify_nonce( siwe_global_value ($_POST, 'siwe_import_nonce'), 'siwe_import_nonce' ) ) {
+		if ( ! wp_verify_nonce( $this->parent->siwe_array_value ($_POST, 'siwe_import_nonce'), 'siwe_import_nonce' ) ) {
 			return;
 		}
 
@@ -751,7 +764,7 @@ class Sign_In_With_Essentials_Admin {
 		// Sanitize auth code.
 		$code = sanitize_text_field( $code );
 
-		$custom_redir_url = siwe_default_url();
+		$custom_redir_url = $this->parent->siwe_redirect_back_url();
 
 		$final_redir_url = str_contains( $custom_redir_url, '://' ) ? $custom_redir_url : site_url( $custom_redir_url );
 
@@ -820,11 +833,14 @@ class Sign_In_With_Essentials_Admin {
 	 */
 	public function disconnect_account() {
 
+		if ( !isset( $_POST['_siwe_account_nonce'] ) ) {
+			return;
+		}
 		// if user not allowed to unlink, then return
 		if ( ! current_user_can( 'manage_options' ) && ! get_option( 'siwe_show_unlink_in_profile' ) )
 			return;
 
-		if (! wp_verify_nonce( siwe_global_value ($_POST, '_siwe_account_nonce'), 'siwe_unlink_account' ) ) {
+		if (! wp_verify_nonce( $this->parent->siwe_array_value ($_POST, '_siwe_account_nonce'), 'siwe_unlink_account' ) ) {
 			wp_die( esc_attr__( 'Unauthorized', 'sign-in-with-essentials' ) );
 		}
 
@@ -1042,8 +1058,8 @@ class Sign_In_With_Essentials_Admin {
 		if ( boolval( get_option( 'siwe_disable_login_page' ) ) )
 		{
 			// Skip only logout action
-			$action = trim( strtolower( siwe_global_value ($_REQUEST, 'action') ) );
-			if ( ! in_array( $action, ["logout", "registration"] ) ) {
+			$action = $this->parent->siwe_array_value ($_REQUEST, 'action');
+			if ( ! empty( $action ) &&  ! in_array( trim( strtolower( $action )), ["logout", "registration"] ) ) {
 				$this->google_auth_redirect();
 			}
 		}
@@ -1062,11 +1078,13 @@ class Sign_In_With_Essentials_Admin {
 		{
 
 			add_action( 'admin_print_scripts', function() {
-				if (IS_PROFILE_PAGE) { ?><script> document.addEventListener('DOMContentLoaded', event => {
+				if (defined('IS_PROFILE_PAGE') && IS_PROFILE_PAGE) {
+					?><script> document.addEventListener('DOMContentLoaded', event => {
 						document.querySelector("#your-profile #email").setAttribute("disabled", "disabled");
 						document.querySelector("#email-description").innerHTML = "<p><i><?php esc_attr_e( 'Email address change is disabled by administrator', 'sign-in-with-essentials'); ?></i></p>";
 					});
-					</script><?php }
+					</script><?php
+				}
 			});
 
 			add_action( 'personal_options_update',

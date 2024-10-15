@@ -44,7 +44,7 @@ class SIWE_GoogleAuthTest extends WP_UnitTestCase {
 		$redirect_uri  = '&redirect_uri=' . urlencode( $this->google_auth->redirect_uri );
 		$response_type = '&response_type=code';
 		$client_id     = '&client_id=' . urlencode( $this->google_auth->client_id );
-		$url_state     = '&state=' . base64_encode( json_encode( $state ) );
+		$url_state     = '&state=' . base64_encode( wp_json_encode( $state ) );
 
 		$this->assertTrue( $this->stringContainsString( $base_url, $result ) );
 		$this->assertTrue( $this->stringContainsString( $scope, $result ) );

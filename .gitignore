@@ -49,3 +49,6 @@ wp-config.php
 .DS_Store
 vendor/
 /google-logos
+/.svn
+/assets/banner-1544x500.psd
+/composer.lock

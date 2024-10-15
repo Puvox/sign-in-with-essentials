@@ -61,7 +61,7 @@ class SIWE_GoogleAuth {
 		$scopes[]     = 'https://www.googleapis.com/auth/userinfo.profile';
 		$this->scopes = urlencode( implode( ' ', $scopes ) );
 
-		$custom_redir_url = siwe_default_url();
+		$custom_redir_url = Sign_In_With_Essentials::siwe_redirect_back_url();
 
 		$final_redir_url = str_contains( $custom_redir_url, '://' ) || str_starts_with($custom_redir_url, '//') ? $custom_redir_url : site_url( $custom_redir_url );
 
