@@ -52,3 +52,6 @@ vendor/
 /.svn
 /assets/banner-1544x500.psd
 /composer.lock
+/src/includes/apple
+/social-logos
+/---- COPY_TO_TC.bat

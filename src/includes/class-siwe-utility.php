@@ -50,4 +50,24 @@ class Sign_In_With_Essentials_Utility {
 
 		return $sanitized_email;
 	}
+
+
+	public static function setcookie ($name, $value, $expires = 0, $path = '', $domain = '', $secure = false, $httponly = false, $samesite = '') {
+		$options =
+		[
+			'expires'  => $expires, //time() + 160 * 10000, // Expires in 60 seconds
+			'path'     => $path,  // Accessible across the entire website
+			'secure'   => $secure, // Only transmit over HTTPS
+			'httponly' => $httponly,  // Not accessible via JavaScript
+			'domain' => $domain
+		];
+		if (!empty ($samesite)) {
+			$options['samesite'] = $samesite; // e.g. 'Strict',              // More stringent protection against CSRF
+		}
+		setcookie(
+			$name,
+			$value,
+			$options
+		);
+	}
 }

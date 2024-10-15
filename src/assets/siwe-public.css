@@ -1,9 +1,4 @@
 
-#siwe-container {
-	background-color: #FFF;
-	margin: 40px 0 0;
-	position: relative;
-}
 
 /* Only include the "OR" on the login page. */
 .login #siwe-container::before {
@@ -19,7 +14,7 @@
 	margin: 40px 0 0;
 	position: relative;
 	display: flex;
-	justify-content: center;
+    flex-direction: column;
 	align-items: center;
 	font-size: 14px;
 	font-weight: 600;
@@ -31,11 +26,18 @@
 	border-radius: 4px;
 }
 
+#siwe-anchor img {
+	border: 1px solid gray;
+    border-radius: 3px;
+	width: 200px;
+	height: 45px;
+}
+
 #siwe-anchor img:hover {
 	background-color: #eee;
 	color: #6d6d6d;
 	cursor: pointer;
-	transform: scale(0.98);
+	box-shadow: 0px 0px 5px black;
 }
 
 .no-js #siwe-container {

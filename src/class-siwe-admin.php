@@ -41,7 +41,7 @@ class Sign_In_With_Essentials_Admin {
 	 * @access private
 	 * @var object
 	 */
-	private $google_auth;
+	protected $module_google;
 
 	/**
 	 * Enable google pic feature
@@ -66,7 +66,7 @@ class Sign_In_With_Essentials_Admin {
 		$this->parent = $parent;
 		$this->plugin_name = $plugin_name;
 		$this->version     = $version;
-		$this->google_auth = new SIWE_GoogleAuth( get_option( 'siwe_google_client_id' ) );
+		$this->module_google = new SIWE_GoogleAuth( get_option( 'siwe_google_client_id' ) );
 		$this->init_hooks();
 	}
 
@@ -82,9 +82,7 @@ class Sign_In_With_Essentials_Admin {
 		$this->parent->add_action( 'login_init', $this, 'check_login_redirection', 888 );
 		$this->parent->add_filter( 'get_avatar', $this, 'slug_get_avatar', 10, 5 );
 		$this->parent->add_action( 'admin_init', $this, 'disconnect_account' );
-		if ( isset( $_GET['google_redirect'] ) ) {
-			$this->parent->add_action( 'template_redirect', $this, 'google_auth_redirect' );
-		}
+		$this->parent->add_action( 'template_redirect', $this, 'auth_redirect' );
 		$this->parent->add_action( 'init', $this, 'check_authenticate_user' );
 		$this->parent->add_filter( 'plugin_action_links_' . $this->plugin_name . '/' . $this->plugin_name . '.php', $this, 'add_action_links' );
 
@@ -118,7 +116,7 @@ class Sign_In_With_Essentials_Admin {
 	 */
 	public function add_connect_button_to_profile() {
 
-		$url            = site_url( '?google_redirect' );
+		$url            = site_url( '?siwe_redirect=google' );
 		$linked_account = get_user_meta( get_current_user_id(), 'siwe_google_account', true );
 		?>
 		<h2><?php esc_attr_e( 'Sign In With Google', 'sign-in-with-essentials' ); ?></h2>
@@ -288,13 +286,13 @@ class Sign_In_With_Essentials_Admin {
 					echo sprintf('<p class="description"><i>%s</i></p>', wp_kses_data(__( 'You can use google profile thumb as an alternative to gravatar icon by default (Above <code>Save user info</code> checkbox needs to be enabled to use this feature. Also note, that this is not relable, as google forbids frequent loading of that url)',  'sign-in-with-essentials')) );
 				}
 			] : []),
-			[
-				'siwe_disable_login_page',
-				esc_attr__( 'Disable WP login page and reditect users to Goolge Sign In', 'sign-in-with-essentials' ),
-				function () {
-					echo '<input type="checkbox" name="siwe_disable_login_page" id="siwe_disable_login_page" value="1" ' . checked( get_option( 'siwe_disable_login_page' ), true, false ) . ' />';
-				}
-			],
+			// [
+			// 	'siwe_disable_login_page',
+			// 	esc_attr__( 'Disable WP login page and reditect users to Goolge Sign In', 'sign-in-with-essentials' ),
+			// 	function () {
+			// 		echo '<input type="checkbox" name="siwe_disable_login_page" id="siwe_disable_login_page" value="1" ' . checked( get_option( 'siwe_disable_login_page' ), true, false ) . ' />';
+			// 	}
+			// ],
 			[
 				'siwe_allow_mail_change',
 				esc_attr__( 'Allow regular user to change own email', 'sign-in-with-essentials' ),
@@ -480,7 +478,6 @@ class Sign_In_With_Essentials_Admin {
 		</div>
 
 		<?php
-
 	}
 
 	/**
@@ -488,18 +485,21 @@ class Sign_In_With_Essentials_Admin {
 	 *
 	 * @since    1.0.0
 	 */
-	public function google_auth_redirect() {
+	public function auth_redirect() {
 
-		// Gather necessary elements for 'state' parameter.
-		$redirect_to = sanitize_url ($this->parent->siwe_array_value($_GET, 'redirect_to'));
-
-		$this->state = array(
-			'redirect_to' => $redirect_to,
-		);
-
-		$url = $this->google_auth->get_google_auth_url( $this->state );
-		wp_redirect( $url );
-		exit;
+		if ( isset( $_GET['siwe_redirect'] ) ) {
+			$value = sanitize_key( wp_unslash( $_GET['siwe_redirect'] ) );
+			if ($value === 'google') {
+				// Gather necessary elements for 'state' parameter.
+				$redirect_to = sanitize_url ($this->parent->siwe_array_value($_GET, 'redirect_to', ''));
+				$this->state = array(
+					'redirect_to' => $redirect_to,
+				);
+				$url = $this->module_google->get_google_auth_url( $this->state );
+			}
+			wp_redirect( $url );
+			exit;
+		}
 	}
 
 	/**
@@ -542,7 +542,7 @@ class Sign_In_With_Essentials_Admin {
 		$params['redirect_after_login'] = true;
 
 		$access_token = $this->set_access_token( $params['code'] );
-		$this->user = $this->get_user_by_token( $access_token );
+		$this->user = $this->module_google->get_user_by_token( $access_token );
 
 		if (!$this->user) {
 			// Something went wrong, redirect to the login page.
@@ -994,42 +994,6 @@ class Sign_In_With_Essentials_Admin {
 	}
 
 
-	/**
-	 * Get the user's info.
-	 *
-	 * @since 1.2.0
-	 *
-	 * @param string $token The user's token for authentication.
-	 */
-	protected function get_user_by_token( $token ) {
-
-		if ( ! $token ) {
-			return;
-		}
-
-		$args = array(
-			'headers' => array(
-				'Authorization' => 'Bearer ' . $token,
-			),
-		);
-
-		$result = wp_remote_request( 'https://www.googleapis.com/userinfo/v2/me', $args );
-
-		$json = json_decode( wp_remote_retrieve_body( $result ) );
-		//
-		// 	{
-		// 		public $id             =>  "123456789123456789123"
-		// 		public $email          => "example@gmail.com"
-		// 		public $verified_email => bool(true)
-		// 		public $name           => string(8) "Firstname Lastname"
-		// 		public $given_name     => string(2) "Firstname"
-		// 		public $family_name    => string(5) "Lastname"
-		// 		public $picture        => string(98) "https://lh3.google-user-content.com/a/xyzxyzxyzxyz=s96-c"
-		// 		public $locale         => string(2) "en"
-		// 	}
-		//
-		return $json;
-	}
 
 	/**
 	 * Checks if the user has the right email domain.
@@ -1055,14 +1019,15 @@ class Sign_In_With_Essentials_Admin {
 	 */
 	public function check_login_redirection()
 	{
-		if ( boolval( get_option( 'siwe_disable_login_page' ) ) )
-		{
-			// Skip only logout action
-			$action = $this->parent->siwe_array_value ($_REQUEST, 'action');
-			if ( ! empty( $action ) &&  ! in_array( trim( strtolower( $action )), ["logout", "registration"] ) ) {
-				$this->google_auth_redirect();
-			}
-		}
+		// todo: select which social to use
+		// if ( boolval( get_option( 'siwe_disable_login_page' ) ) )
+		// {
+		// 	// Skip only logout action
+		// 	$action = $this->parent->siwe_array_value ($_REQUEST, 'action');
+		// 	if ( ! empty( $action ) &&  ! in_array( trim( strtolower( $action )), ["logout", "registration"] ) ) {
+		// 		$this->google_auth_redirect();
+		// 	}
+		// }
 	}
 
 

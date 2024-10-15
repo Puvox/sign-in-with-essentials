@@ -27,7 +27,7 @@ class Sign_In_With_Essentials_Public {
 		$this->parent->add_action( 'wp_enqueue_scripts', $this, 'enqueue_styles' );
 		$this->parent->add_action( 'login_enqueue_scripts', $this, 'enqueue_scripts' );
 		if ( get_option( 'siwe_show_on_login' ) ) {
-			$this->parent->add_action( 'login_form', $this, 'add_signin_button' );
+			$this->parent->add_action( 'login_footer', $this, 'add_signin_button' );
 		}
 	}
 
@@ -52,16 +52,22 @@ class Sign_In_With_Essentials_Public {
 	 * @return string
 	 */
 	public static function get_signin_button() {
-		return sprintf(
+		$result = sprintf(
 			'<div id="siwe-container">
+				<a id="siwe-anchor" href="%s">
+					<img src="%s" alt="Sign in with Google" />
+				</a>
 				<a id="siwe-anchor" href="%s">
 					<img src="%s" alt="Sign in with Google" />
 				</a>
 			</div>',
 			// Keep existing url query string intact.
-			site_url( '?google_redirect&' ) . wp_kses_data (Sign_In_With_Essentials::siwe_array_value ($_SERVER, 'QUERY_STRING')),
-			esc_url( plugin_dir_url( __FILE__ ) . 'assets/web_light_rd_SI@1x.png' )
+			site_url( '?siwe_redirect=google&' ) . wp_kses_data (Sign_In_With_Essentials::siwe_array_value ($_SERVER, 'QUERY_STRING')),
+			esc_url( plugin_dir_url( __FILE__ ) . 'assets/login-with-google-neutral.png' ),
+			site_url( '?siwe_redirect=microsoft&' ) . wp_kses_data (Sign_In_With_Essentials::siwe_array_value ($_SERVER, 'QUERY_STRING')),
+			esc_url( plugin_dir_url( __FILE__ ) . 'assets/login-with-microsoft-neutral.png' )
 		);
+		return  $result;
 	}
 
 }

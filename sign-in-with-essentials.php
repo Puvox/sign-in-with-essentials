@@ -47,6 +47,15 @@ class Sign_In_With_Essentials {
 	protected $filters = [];
 
 	/**
+	 * MicrosoftAuth class
+	 *
+	 * @since 1.5.2
+	 * @access private
+	 * @var object
+	 */
+	protected $module_microsoft;
+
+	/**
 	 * Define the core functionality of the plugin.
 	 *
 	 * Set the plugin name and the plugin version that can be used throughout the plugin.
@@ -79,6 +88,7 @@ class Sign_In_With_Essentials {
 		require_once __DIR__ . '/src/includes/class-siwe-utility.php';
 		require_once __DIR__ . '/src/includes/class-siwe-wpcli.php';
 		require_once __DIR__ . '/src/includes/class-module-google.php';
+		require_once __DIR__ . '/src/includes/class-module-microsoft.php';
 		require_once __DIR__ . '/src/class-siwe-admin.php';
 		require_once __DIR__ . '/src/class-siwe-public.php';
 	}
@@ -94,6 +104,7 @@ class Sign_In_With_Essentials {
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			new Sign_In_With_Essentials_WPCLI();
 		}
+		$this->module_microsoft = new SIWE_MicrosoftAuth( $this );
 	}
 
 
@@ -199,15 +210,15 @@ function siwe_get_button() {
  *
  * @return string
  */
-function siwe_get_google_auth_url( $state = array() ) {
-	$client_id = get_option( 'siwe_google_client_id' );
+// function siwe_get_google_auth_url( $state = array() ) {
+// 	$client_id = get_option( 'siwe_google_client_id' );
 
-	// Bail if there is no client ID.
-	if ( ! $client_id ) {
-		return '';
-	}
+// 	// Bail if there is no client ID.
+// 	if ( ! $client_id ) {
+// 		return '';
+// 	}
 
-	return ( new SIWE_GoogleAuth( $client_id ) )->get_google_auth_url( $state );
-}
+// 	return ( new SIWE_GoogleAuth( $client_id ) )->get_google_auth_url( $state );
+// }
 
 
