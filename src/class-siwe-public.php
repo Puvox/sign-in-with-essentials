@@ -26,9 +26,7 @@ class Sign_In_With_Essentials_Public {
 		$this->parent->add_action( 'login_enqueue_scripts', $this, 'enqueue_styles' );
 		$this->parent->add_action( 'wp_enqueue_scripts', $this, 'enqueue_styles' );
 		$this->parent->add_action( 'login_enqueue_scripts', $this, 'enqueue_scripts' );
-		if ( get_option( 'siwe_show_on_login' ) ) {
-			$this->parent->add_action( 'login_footer', $this, 'add_signin_button' );
-		}
+		$this->parent->add_action( 'login_footer', $this, 'add_signin_button' );
 	}
 
 	public function enqueue_styles() {
@@ -43,7 +41,9 @@ class Sign_In_With_Essentials_Public {
 	 * Adds the sign-in button to the login form.
 	 */
 	public function add_signin_button() {
-		echo wp_kses_post( self::get_signin_button());
+		if ( get_option( 'siwe_show_on_login' ) ) {
+			echo wp_kses_post( self::get_signin_button());
+		}
 	}
 
 	/**
@@ -52,22 +52,26 @@ class Sign_In_With_Essentials_Public {
 	 * @return string
 	 */
 	public static function get_signin_button() {
-		$result = sprintf(
-			'<div id="siwe-container">
-				<a id="siwe-anchor" href="%s">
-					<img src="%s" alt="Sign in with Google" />
-				</a>
-				<a id="siwe-anchor" href="%s">
-					<img src="%s" alt="Sign in with Google" />
-				</a>
-			</div>',
-			// Keep existing url query string intact.
-			site_url( '?siwe_redirect=google&' ) . wp_kses_data (Sign_In_With_Essentials::siwe_array_value ($_SERVER, 'QUERY_STRING')),
-			esc_url( plugin_dir_url( __FILE__ ) . 'assets/login-with-google-neutral.png' ),
-			site_url( '?siwe_redirect=microsoft&' ) . wp_kses_data (Sign_In_With_Essentials::siwe_array_value ($_SERVER, 'QUERY_STRING')),
-			esc_url( plugin_dir_url( __FILE__ ) . 'assets/login-with-microsoft-neutral.png' )
-		);
-		return  $result;
+		$array = ['google', 'microsoft'];
+		$enabled = array_filter( $array, function( $vendor ) {
+			return get_option( 'siwe_enable_' . $vendor );
+		});
+		if (empty($enabled)) {
+			return '';
+		}
+		$result = '<div id="siwe-container">';
+		foreach ($enabled as $vendor) {
+			$result .= sprintf(
+				'<a id="siwe-anchor" href="%s">
+					<img src="%s" alt="Sign in with %s" />
+				</a>',
+				// Keep existing url query string intact.
+				site_url( '?siwe_auth_redirect=' . $vendor . '&' ) . wp_kses_data (Sign_In_With_Essentials::value ($_SERVER, 'QUERY_STRING')),
+				esc_url( plugin_dir_url( __FILE__ ) . 'assets/login-with-' . $vendor . '-neutral.png' ),
+				ucfirst($vendor),
+			);
+		}
+		$result .= '</div>';
+		return $result;
 	}
-
 }

@@ -70,4 +70,5 @@ class Sign_In_With_Essentials_Utility {
 			$options
 		);
 	}
+
 }

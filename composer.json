@@ -1,6 +1,6 @@
 {
     "name": "puvox/sign-in-with-essentials",
-    "description": "Adds a \"Sign in with Google\" button to the login page, and allows users to sign up and login using Google.",
+    "description": "Adds a \"Sign in with\" Google/Apple/Microsoft functionality to your website.",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "authors": [
@@ -23,5 +23,8 @@
             "composer/installers": true,
             "dealerdirect/phpcodesniffer-composer-installer": true
         }
+    },
+    "replace": {
+        "paragonie/random_compat": "*"
     }
 }

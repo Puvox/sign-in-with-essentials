@@ -37,7 +37,7 @@ class SIWE_GoogleAuthTest extends WP_UnitTestCase {
 		$state  = array(
 			'test' => 'true',
 		);
-		$result = $this->google_auth->get_google_auth_url( $state );
+		$result = $this->google_auth->get_auth_url( $state );
 
 		$base_url      = $this->google_auth->base_url;
 		$scope         = '?scope=' . $this->google_auth->scopes;

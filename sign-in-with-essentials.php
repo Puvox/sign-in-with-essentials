@@ -5,8 +5,8 @@
  * @wordpress-plugin
  * Plugin Name:       Sign In With Essentials
  * Plugin URI:        https://www.github.com/puvox/sign-in-with-essentials
- * Description:       Adds a "Sign in with Google" button to the login page, and allows users to sign up and login using Google.
- * Version:           1.0.1
+ * Description:       Adds a "Sign in with" Google/Apple/Microsoft functionality to your WordPress site. Read more in <a href="https://wordpress.org/plugins/sign-in-with-essentials">Readme</a>.
+ * Version:           1.2.0
  * Author:            Puvox Software
  * Author URI:        https://puvox.software
  * License:           GPL-2.0+
@@ -22,7 +22,7 @@ if ( ! defined( 'WPINC' ) ) {
 
 define ( 'SIWE_PLUGIN_VERSION', '1.0.1' );
 
-define ('SIWE_DEFAULT_REDIRECT_PATH', '?google_response');
+define ('SIWE_DEFAULT_REDIRECT_PATH', '_AUTH_RESPONSE_SIWE_');
 
 
 /**
@@ -91,12 +91,17 @@ class Sign_In_With_Essentials {
 		require_once __DIR__ . '/src/includes/class-module-microsoft.php';
 		require_once __DIR__ . '/src/class-siwe-admin.php';
 		require_once __DIR__ . '/src/class-siwe-public.php';
+		require_once __DIR__ . '/src/includes/class-siwe-handlers.php';
 	}
 
+	public $plugin_handlers;
+
 	private function load_classes() {
+		$this->plugin_handlers = new Sign_In_With_Essentials_Handlers( $this, $this->get_plugin_name(), $this->get_version() );
 		$plugin_admin = new Sign_In_With_Essentials_Admin( $this, $this->get_plugin_name(), $this->get_version() );
 		$plugin_public = new Sign_In_With_Essentials_Public( $this, $this->get_plugin_name(), $this->get_version() );
 		if (get_option('siwe_expose_class_instance')) {
+			do_action('SIGN_IN_WITH_ESSENTIALS_INSTANCE_HANDLERS', $this->plugin_handlers);
 			do_action('SIGN_IN_WITH_ESSENTIALS_INSTANCE_ADMIN', $plugin_admin);
 			do_action('SIGN_IN_WITH_ESSENTIALS_INSTANCE_PUBLIC', $plugin_public);
 		}
@@ -146,11 +151,13 @@ class Sign_In_With_Essentials {
 	 */
 	public function run_hooks() {
 		foreach ( $this->filters as $hook ) {
-			add_filter( $hook['hook'], array( $hook['component'], $hook['callback'] ), $hook['priority'], $hook['accepted_args'] );
+			$callback = $hook['component'] ? [ $hook['component'], $hook['callback'] ] : $hook['callback'];
+			add_filter( $hook['hook'], $callback, $hook['priority'], $hook['accepted_args'] );
 		}
 
 		foreach ( $this->actions as $hook ) {
-			add_action( $hook['hook'], array( $hook['component'], $hook['callback'] ), $hook['priority'], $hook['accepted_args'] );
+			$callback = $hook['component'] ? [ $hook['component'], $hook['callback'] ] : $hook['callback'];
+			add_action( $hook['hook'], $callback, $hook['priority'], $hook['accepted_args'] );
 		}
 	}
 
@@ -178,11 +185,25 @@ class Sign_In_With_Essentials {
 	}
 
 	public static function siwe_redirect_back_url() {
-		return get_option( 'siwe_google_custom_redir_url', SIWE_DEFAULT_REDIRECT_PATH);
+		return get_option( 'siwe_custom_redir_url', SIWE_DEFAULT_REDIRECT_PATH);
 	}
 
-	public static function siwe_array_value( $container, $name, $default = null) {
-		return array_key_exists ($name, $container) ? $container[$name] : $default;
+	public static function siwe_redirect_back_url_with_domain() {
+		$custom_redir_url = self::siwe_redirect_back_url();
+		$final_redir_url = str_contains( $custom_redir_url, '://' ) || str_starts_with($custom_redir_url, '//') ? $custom_redir_url : site_url( $custom_redir_url );
+		return $final_redir_url;
+	}
+
+	public static function value($container, $name, $default = null) {
+		if ($container === null) {
+			throw new \Exception('Container is null');
+		}
+		if (is_array($container)) {
+			return array_key_exists ($name, $container) ? $container[$name] : $default;
+		} else {
+			return property_exists ($container, $name) ? $container->$name : $default;
+		}
+
 	}
 
 }
@@ -210,7 +231,7 @@ function siwe_get_button() {
  *
  * @return string
  */
-// function siwe_get_google_auth_url( $state = array() ) {
+// function siwe_get_auth_url( $state = array() ) {
 // 	$client_id = get_option( 'siwe_google_client_id' );
 
 // 	// Bail if there is no client ID.
@@ -218,7 +239,8 @@ function siwe_get_button() {
 // 		return '';
 // 	}
 
-// 	return ( new SIWE_GoogleAuth( $client_id ) )->get_google_auth_url( $state );
+// 	return ( new SIWE_GoogleAuth( $client_id ) )->get_auth_url( $state );
 // }
 
+//  composer install --no-dev --prefer-dist
 

@@ -12,38 +12,42 @@ class Sign_In_With_Essentials_WPCLI {
 
 	public function args_map () {
 		return [
-			'client_id' => [
-				'type' => 'string',
-				'allow_empty' => true,
-				'scope'=> 'google',
-			],
-			'client_secret' => [
-				'type' => 'string',
-				'allow_empty' => true,
-				'scope'=> 'google',
-			],
-			'email_sanitization' => [
+			'enable_google' => [
 				'type' => 'bool',
-				'scope'=> 'google',
+			],
+			'google_client_id' => [
+				'type' => 'string',
+				'allow_empty' => true,
+			],
+			'google_client_secret' => [
+				'type' => 'string',
+				'allow_empty' => true,
+			],
+			'enable_microsoft' => [
+				'type' => 'bool',
+			],
+			'microsoft_client_id' => [
+				'type' => 'string',
+				'allow_empty' => true,
+			],
+			'microsoft_client_secret' => [
+				'type' => 'string',
+				'allow_empty' => true,
+			],
+			'google_email_sanitization' => [
+				'type' => 'bool',
 			],
 			'allowed_domains' => [
 				'type' => 'string',
 				'allow_empty' => true,
-				'scope'=> 'google',
 			],
 			'custom_redir_url' => [
 				'type' => 'string',
 				'allow_empty' => true,
 				'sanitizer' => 'sanitize_text_field',
-				'scope'=> 'google',
 			],
-			'save_userinfo' => [
+			'save_remote_info' => [
 				'type' => 'bool',
-				'scope'=> 'google',
-			],
-			'use_profile_pic' => [
-				'type' => 'bool',
-				'scope'=> 'google',
 			],
 			'user_default_role' => [
 				'type' => 'string',
@@ -80,11 +84,23 @@ class Sign_In_With_Essentials_WPCLI {
 	 *     wp siwe settings --whatever=myvalue
 	 *
 	 *
-	 * [--client_id=<client_id>]
-	 * : Your Oauth Client ID from console.developers.google.com
+	 * [--enable_google=<1|0>]
+	 * : Enable Google sign-in
 	 *
-	 * [--client_secret=<client_secret>]
-	 * : Your Oauth Client Secret from console.developers.google.com
+	 * [--google_client_id=<client_id>]
+	 * : Client ID
+	 *
+	 * [--google_client_secret=<client_secret>]
+	 * : Client Secret
+	 *
+	 * [--enable_microsoft=<1|0>]
+	 * : Enable Microsoft sign-in
+	 *
+	 * [--microsoft_client_id=<client_id>]
+	 * : Client ID
+	 *
+	 * [--microsoft_client_secret=<client_secret>]
+	 * : Client Secret
 	 *
 	 * [--user_default_role=<role>]
 	 * : The role new users should have.
@@ -92,8 +108,8 @@ class Sign_In_With_Essentials_WPCLI {
 	 * [--allowed_domains=<domains>]
 	 * : comma separated domains list
 	 *
-	 * [--save_userinfo=<1|0>]
-	 * : Save some fields provided from google login to user meta.
+	 * [--save_remote_info=<1|0>]
+	 * : Save some extra fields provided during successfull login from provider
 	 *
 	 * [--custom_redir_url=<url>]
 	 * : You can set custom redirect back url
@@ -101,13 +117,10 @@ class Sign_In_With_Essentials_WPCLI {
 	 * [--expose_class_instance=<1|0>]
 	 * : Expose SIWE class instance to global $GLOBALS
 	 *
-	 * [--email_sanitization=<1|0>]
+	 * [--email_sanitization_google=<1|0>]
 	 * : Sanitize emails (a+b.c@gmail.com -> abc@gmail.com) to unique google account, to avoid duplicate/spammy aliases of gmail.
 	 *
 	 * [--allow_registration_even_if_disabled=<1|0>]
-	 * : Allow registration through social sign in, even if site has disabled registrations.
-	 *
-	 * [--use_profile_pic=<1|0>]
 	 * : Allow registration through social sign in, even if site has disabled registrations.
 	 *
 	 * [--show_on_login=<1|0>]
@@ -117,7 +130,7 @@ class Sign_In_With_Essentials_WPCLI {
 	 * : Allow regular users to change their emails by themselves.
 	 *
 	 * [--show_unlink_in_profile=<1|0>]
-	 * : Show the Unlink button for users in their profile
+	 * : Show the Unlink button for users in their profile (otherwise only admins can unlink).
 	 *
 	 * [--disable_login_page=<1|0>]
 	 * : Disable user & password fields on login page, instead suggest users to login with social sign in.
@@ -145,13 +158,13 @@ class Sign_In_With_Essentials_WPCLI {
 			}
 
 			$arg_opts = $args_map[ $key ];
-			$allow_empty = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'allow_empty', true);
+			$allow_empty = Sign_In_With_Essentials::value ($arg_opts, 'allow_empty', true);
 
 			if ( empty ($value) &&  $allow_empty === false ) {
 				WP_CLI::error( "Empty value not allowed for: $key" );
 			}
 
-			$allowed_values = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'allowed_values', null);
+			$allowed_values = Sign_In_With_Essentials::value ($arg_opts, 'allowed_values', null);
 			if ($allowed_values !== null) {
 				if ( ! in_array( $value, $allowed_values ) ) {
 					WP_CLI::error( "$key value should be among: " . implode( ', ', $allowed_values ) );
@@ -164,7 +177,7 @@ class Sign_In_With_Essentials_WPCLI {
 				$value = boolval( $value );
 			}
 
-			$sanitizer = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'sanitizer', null);
+			$sanitizer = Sign_In_With_Essentials::value ($arg_opts, 'sanitizer', null);
 			if ($sanitizer !== null) {
 				$new_value = call_user_func ($sanitizer, $value);
 				if ($new_value !== $value) {
@@ -173,8 +186,8 @@ class Sign_In_With_Essentials_WPCLI {
 				$value = $new_value;
 			}
 
-			$scope = Sign_In_With_Essentials::siwe_array_value ($arg_opts, 'scope', null);
-			$prefix = $scope  ? 'siwe_google_' : 'siwe_';
+			$scope = Sign_In_With_Essentials::value ($arg_opts, 'scope', null);
+			$prefix = $scope  ? "siwe_{$scope}_" : 'siwe_';
 			$result = update_option( $prefix . $key, $value );
 
 			if ( ! $result ) {

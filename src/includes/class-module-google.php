@@ -15,28 +15,21 @@
  */
 class SIWE_GoogleAuth {
 
+	private $app;
+
 	public $base_url = 'https://accounts.google.com/o/oauth2/v2/auth';
 
-	public $client_id;
-
-	public $scopes;
+	public $scopes = [
+		'https://www.googleapis.com/auth/userinfo.email',
+		'https://www.googleapis.com/auth/userinfo.profile', // given_name (eg. Elvis), family_name (eg. Presley), name (eg. Elvis Presley)
+	];
 
 	public $redirect_uri;
 
-	public function __construct( $client_id ) {
-		$this->client_id = $client_id;
-
-		$scopes[]     = 'https://www.googleapis.com/auth/userinfo.email';
-		$scopes[]     = 'https://www.googleapis.com/auth/userinfo.profile';
-		$this->scopes = urlencode( implode( ' ', $scopes ) );
-
-		$custom_redir_url = Sign_In_With_Essentials::siwe_redirect_back_url();
-
-		$final_redir_url = str_contains( $custom_redir_url, '://' ) || str_starts_with($custom_redir_url, '//') ? $custom_redir_url : site_url( $custom_redir_url );
-
-		$this->redirect_uri = $final_redir_url;
+	public function __construct($app) {
+		$this->app = $app;
+		$this->redirect_uri = Sign_In_With_Essentials::siwe_redirect_back_url_with_domain();
 	}
-
 	/**
 	 * Get the URL for sending user to Google for authentication.
 	 *
@@ -44,23 +37,63 @@ class SIWE_GoogleAuth {
 	 *
 	 * @param string $state Nonce to pass to Google to verify return of the original request.
 	 */
-	public function get_google_auth_url( $state ) {
-		return $this->google_auth_url( $state );
+	public function get_auth_url( $state ) {
+		$scopes = urlencode( implode( ' ', apply_filters( 'siwe_scopes', $this->scopes, 'google' ) ) );
+		$redirect_uri  = urlencode( $this->redirect_uri ); // already filtered outside
+		$encoded_state = base64_encode( wp_json_encode( $state ) );
+		return $this->base_url . '?scope=' . $scopes . '&redirect_uri=' . $redirect_uri . '&response_type=code&client_id=' . get_option( 'siwe_google_client_id' ) . '&state=' . $encoded_state . '&prompt=select_account';
 	}
 
-	/**
-	 * Builds out the Google redirect URL
-	 *
-	 * @since    1.5.2
-	 *
-	 * @param string $state Nonce to pass to Google to verify return of the original request.
-	 */
-	private function google_auth_url( $state ) {
-		$scopes = apply_filters( 'siwe_scopes', $this->scopes );
 
-		$redirect_uri  = urlencode( $this->redirect_uri );
-		$encoded_state = base64_encode( wp_json_encode( $state ) );
-		return $this->base_url . '?scope=' . $scopes . '&redirect_uri=' . $redirect_uri . '&response_type=code&client_id=' . $this->client_id . '&state=' . $encoded_state . '&prompt=select_account';
+	/**
+	 * Sets the access_token using the response code.
+	 *
+	 * @since 1.0.0
+	 * @param string $code The code provided by Google's redirect.
+	 *
+	 * @return mixed Access token on success or WP_Error.
+	 */
+	public function retrieve_access_token_by_code( $code = '' ) {
+
+		if ( ! $code ) {
+			throw new \Exception ( 'No authorization code provided.' );
+		}
+
+		$args = array(
+			'body' => array(
+				'code'          => $code,
+				'client_id'     => get_option( 'siwe_google_client_id' ),
+				'client_secret' => get_option( 'siwe_google_client_secret' ),
+				'redirect_uri'  => Sign_In_With_Essentials::siwe_redirect_back_url_with_domain(),
+				'grant_type'    => 'authorization_code',
+			),
+		);
+
+		$response = wp_remote_post( 'https://www.googleapis.com/oauth2/v4/token', $args );
+
+		$body = json_decode( wp_remote_retrieve_body( $response ) );
+		/*
+		error:
+		  {
+		    public $error => "invalid_grant"
+		  	public $error_description => "Bad Request"
+		  }
+
+		success:
+		  {
+		    public $access_token =>  "yaG453h..."
+		    public $expires_in   =>  int(3599)
+		    public $scope        => "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+		    public $token_type   => "Bearer"
+		    public $id_token      => "eyAfd46iOiJSUzI..."
+		  }
+		*/
+
+		if ( isset($body->access_token) && '' !== $body->access_token ) {
+			return $body->access_token;
+		}
+
+		return false;
 	}
 
 
@@ -71,7 +104,7 @@ class SIWE_GoogleAuth {
 	 *
 	 * @param string $token The user's token for authentication.
 	 */
-	protected function get_user_by_token( $token ) {
+	public function get_user_by_access_token( $token ) {
 
 		if ( ! $token ) {
 			return;
@@ -100,4 +133,11 @@ class SIWE_GoogleAuth {
 		//
 		return $json;
 	}
+
+
+	public function set_and_retrieve_user_by_code( $code ) {
+		$token = $this->retrieve_access_token_by_code( $code );
+		return $this->get_user_by_access_token( $token );
+	}
+
 }
